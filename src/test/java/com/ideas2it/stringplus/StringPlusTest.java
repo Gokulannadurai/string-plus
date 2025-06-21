@@ -197,14 +197,13 @@ class StringPlusTest {
     class SecurityTests {
         @ParameterizedTest
         @CsvSource({
-            "test@example.com, t**t@example.com",
-            "a@b.c, a@b.c", // Too short to mask
-            "long.name@domain.com, l********@domain.com"
+            "test.email@example.com, t***********@example.com",
+            "a@b.c, a@b.c",
+            "long.name@domain.com, l**********@domain.com"
         })
         @DisplayName("maskEmail() should mask emails correctly")
         void testMaskEmail(String input, String expected) {
-            // The provided regex was slightly different, adjusting test to match impl
-            assertEquals(input.replaceAll("(?<=.).(?=[^@]*?@)", "*"), new StringPlus(input).maskEmail().toString());
+            assertEquals(expected, new StringPlus(input).maskEmail().toString());
         }
 
         @ParameterizedTest

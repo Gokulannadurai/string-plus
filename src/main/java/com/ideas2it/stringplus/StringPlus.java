@@ -8,7 +8,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * A powerful, immutable, and feature-rich string manipulation utility class.
@@ -127,16 +126,29 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      */
     public StringPlus titleCase() {
         if (value == null || value.isEmpty()) return this;
-        String[] words = value.toLowerCase().split("\\s+");
-        StringBuilder sb = new StringBuilder();
-        for (String word : words) {
-            if (!word.isEmpty()) {
-                sb.append(Character.toUpperCase(word.charAt(0)))
-                  .append(word.substring(1))
-                  .append(" ");
+
+        final StringBuilder result = new StringBuilder(value.length());
+        final StringBuilder currentWord = new StringBuilder();
+
+        for (char c : value.toCharArray()) {
+            if (Character.isWhitespace(c)) {
+                if (currentWord.length() > 0) {
+                    currentWord.setCharAt(0, Character.toTitleCase(currentWord.charAt(0)));
+                    result.append(currentWord);
+                    currentWord.setLength(0);
+                }
+                result.append(c); 
+            } else {
+                currentWord.append(Character.toLowerCase(c));
             }
         }
-        return new StringPlus(sb.toString().trim());
+
+        if (currentWord.length() > 0) {
+            currentWord.setCharAt(0, Character.toTitleCase(currentWord.charAt(0)));
+            result.append(currentWord);
+        }
+
+        return new StringPlus(result.toString());
     }
 
     /**
@@ -148,14 +160,22 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
     public StringPlus trimChars(char... chars) {
         if (value == null || chars.length == 0) return this;
         
-        StringBuilder patternBuilder = new StringBuilder("[");
+        java.util.Set<Character> trimSet = new java.util.HashSet<>();
         for (char c : chars) {
-            patternBuilder.append(Pattern.quote(String.valueOf(c)));
+            trimSet.add(c);
         }
-        patternBuilder.append("]");
-        
-        String pattern = "^" + patternBuilder.toString() + "+|" + patternBuilder.toString() + "+$";
-        return new StringPlus(value.replaceAll(pattern, ""));
+
+        int start = 0;
+        while (start < value.length() && trimSet.contains(value.charAt(start))) {
+            start++;
+        }
+
+        int end = value.length();
+        while (end > start && trimSet.contains(value.charAt(end - 1))) {
+            end--;
+        }
+
+        return new StringPlus(value.substring(start, end));
     }
 
     /**
@@ -166,12 +186,31 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      * @return A new, slugified StringPlus instance.
      */
     public StringPlus slugify() {
-        if (value == null || value.trim().isEmpty()) return new StringPlus("");
-        String normalized = Normalizer.normalize(value, Normalizer.Form.NFD);
-        return new StringPlus(normalized.toLowerCase()
-            .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
-            .replaceAll("[^a-z0-9]+", "-")
-            .replaceAll("^-|-$", ""));
+        if (value == null || value.trim().isEmpty()) {
+            return new StringPlus("");
+        }
+
+        String text = this.toLowerCase().removeAccents().toString();
+        StringBuilder slug = new StringBuilder();
+        boolean lastCharWasHyphen = false;
+
+        for (char c : text.toCharArray()) {
+            if (Character.isLetterOrDigit(c)) {
+                slug.append(c);
+                lastCharWasHyphen = false;
+            } else if (!lastCharWasHyphen && slug.length() > 0) {
+                slug.append('-');
+                lastCharWasHyphen = true;
+            }
+        }
+
+        int start = 0;
+        int end = slug.length();
+
+        while (start < end && slug.charAt(start) == '-') start++;
+        while (end > start && slug.charAt(end - 1) == '-') end--;
+
+        return new StringPlus(slug.substring(start, end));
     }
 
     /**
@@ -183,9 +222,10 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
     public List<StringPlus> splitAndTrim(String delimiter) {
         if (value == null || value.isEmpty()) return Collections.emptyList();
         return Arrays.stream(value.split(Pattern.quote(delimiter)))
-                     .map(String::trim)
-                     .map(StringPlus::new)
-                     .collect(Collectors.toList());
+                .map(String::trim)
+                .filter(s -> !s.isEmpty()) // filter out empty parts
+                .map(StringPlus::new)
+                .toList(); // returns unmodifiable list
     }
 
     /**
@@ -259,7 +299,17 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      */
     public StringPlus maskEmail() {
         if (value == null) return this;
-        return new StringPlus(value.replaceAll("(?<=.).(?=[^@]*?@)", "*"));
+        
+        int atIndex = value.indexOf('@');
+        if (atIndex <= 1) { // No '@' found, or username is only one character
+            return this;
+        }
+
+        char[] masked = value.toCharArray();
+        for (int i = 1; i < atIndex; i++) {
+            masked[i] = '*';
+        }
+        return new StringPlus(new String(masked));
     }
 
     /**
@@ -269,7 +319,22 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      */
     public StringPlus maskPhone() {
         if (value == null) return this;
-        return new StringPlus(value.replaceAll("\\d(?=\\d{4})", "*"));
+        
+        char[] chars = value.toCharArray();
+        List<Integer> digitIndices = new ArrayList<>();
+        for (int i = 0; i < chars.length; i++) {
+            if (Character.isDigit(chars[i])) {
+                digitIndices.add(i);
+            }
+        }
+
+        if (digitIndices.size() > 4) {
+            for (int i = 0; i < digitIndices.size() - 4; i++) {
+                chars[digitIndices.get(i)] = '*';
+            }
+        }
+        
+        return new StringPlus(new String(chars));
     }
 
     /**
@@ -278,10 +343,22 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      * @return The word count.
      */
     public int wordCount() {
-        if (value == null || value.trim().isEmpty()) {
+        if (value == null || value.isEmpty()) {
             return 0;
         }
-        return value.trim().split("\\s+").length;
+        int count = 0;
+        boolean inWord = false;
+        for (int i = 0; i < value.length(); i++) {
+            if (Character.isWhitespace(value.charAt(i))) {
+                inWord = false;
+            } else {
+                if (!inWord) {
+                    count++;
+                }
+                inWord = true;
+            }
+        }
+        return count;
     }
 
     /**
@@ -291,7 +368,26 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
      */
     public List<String> tokenize() {
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
-        return Arrays.asList(value.trim().split("\\W+"));
+        
+        List<String> tokens = new ArrayList<>();
+        StringBuilder currentToken = new StringBuilder();
+        
+        for (char c : value.trim().toCharArray()) {
+            if (Character.isLetterOrDigit(c)) {
+                currentToken.append(c);
+            } else {
+                if (currentToken.length() > 0) {
+                    tokens.add(currentToken.toString());
+                    currentToken.setLength(0);
+                }
+            }
+        }
+        
+        if (currentToken.length() > 0) {
+            tokens.add(currentToken.toString());
+        }
+        
+        return tokens;
     }
     
     // --- Object Methods ---
@@ -311,12 +407,11 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
         if (this == obj) return true;
         if (obj == null) return false;
         
-        if (obj instanceof StringPlus) {
-            StringPlus other = (StringPlus) obj;
+        if (obj instanceof StringPlus stringPlus) {
             if (value == null) {
-                return other.value == null;
+                return stringPlus.value == null;
             }
-            return value.equals(other.value);
+            return value.equals(stringPlus.value);
         }
         
         if (obj instanceof String) {
