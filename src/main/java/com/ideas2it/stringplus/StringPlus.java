@@ -46,6 +46,86 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
         return new StringPlus(value);
     }
 
+    /**
+     * Efficiently joins a list of String instances with a delimiter.
+     * Null values are treated as empty strings. Returns an empty StringPlus if the list is null or empty.
+     *
+     * @param parts The list of String instances to join.
+     * @param delimiter The delimiter to use between parts.
+     * @return A new StringPlus containing the joined string.
+     */
+    public static StringPlus join(List<StringPlus> parts, String delimiter) {
+        if (parts == null || parts.isEmpty()) {
+            return new StringPlus("");
+        }
+        String safeDelimiter = delimiter == null ? "" : delimiter;
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (StringPlus part : parts) {
+            if (!first) {
+                sb.append(safeDelimiter);
+            }
+            sb.append(part == null ? "" : part);
+            first = false;
+        }
+        return new StringPlus(sb.toString());
+    }
+
+    /**
+     * Efficiently concatenates a list of StringPlus instances with no delimiter.
+     * Null values are treated as empty strings. Returns empty if list is null or empty.
+     * @param parts the list of StringPlus to concatenate
+     * @return a new StringPlus with all values concatenated
+     */
+    public static StringPlus concat(List<StringPlus> parts) {
+        if (parts == null || parts.isEmpty()) {
+            return new StringPlus("");
+        }
+        StringBuilder sb = new StringBuilder();
+        for (StringPlus part : parts) {
+            sb.append(part == null ? "" : part.toString());
+        }
+        return new StringPlus(sb.toString());
+    }
+
+    /**
+     * Checks if a String is null or empty.
+     * @param s the String to check
+     * @return true if null or empty
+     */
+    public static boolean isNullOrEmpty(String s) {
+        return s == null || s.isEmpty();
+    }
+
+    /**
+     * Checks if a StringPlus is null or empty.
+     * @param sp the StringPlus to check
+     * @return true if null or empty
+     */
+    public static boolean isNullOrEmpty(StringPlus sp) {
+        return sp == null || sp.toString() == null || sp.toString().isEmpty();
+    }
+
+    /**
+     * Returns defaultValue if s is null, else s.
+     * @param s the String to check
+     * @param defaultValue the default value to return if s is null
+     * @return s if not null, else defaultValue
+     */
+    public static String defaultIfNull(String s, String defaultValue) {
+        return s == null ? defaultValue : s;
+    }
+
+    /**
+     * Returns defaultValue if sp is null, else sp.
+     * @param sp the StringPlus to check
+     * @param defaultValue the default value to return if sp is null
+     * @return sp if not null, else defaultValue
+     */
+    public static StringPlus defaultIfNull(StringPlus sp, StringPlus defaultValue) {
+        return sp == null ? defaultValue : sp;
+    }
+
     // --- CharSequence Methods ---
 
     @Override
@@ -69,6 +149,57 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
         return new StringPlus(value.subSequence(start, end).toString());
     }
 
+    /**
+     * Returns the number of Unicode code points in the string.
+     * @return the code point count, or 0 if value is null
+     */
+    public int codePointCount() {
+        if (value == null) return 0;
+        return value.codePointCount(0, value.length());
+    }
+
+    /**
+     * Returns the code point at the specified code point index.
+     * @param codePointIndex the index in code points
+     * @return the Unicode code point as an int
+     * @throws IndexOutOfBoundsException if index is out of range or value is null
+     */
+    public int codePointAt(int codePointIndex) {
+        if (value == null) throw new IndexOutOfBoundsException("String is null");
+        int charIndex = value.offsetByCodePoints(0, codePointIndex);
+        return value.codePointAt(charIndex);
+    }
+
+    /**
+     * Returns a substring based on code point indices.
+     * @param beginCodePointIndex the start code point index (inclusive)
+     * @param endCodePointIndex the end code point index (exclusive)
+     * @return a new StringPlus with the substring
+     * @throws IndexOutOfBoundsException if indices are out of range or value is null
+     */
+    public StringPlus codePointSubstring(int beginCodePointIndex, int endCodePointIndex) {
+        if (value == null) throw new IndexOutOfBoundsException("String is null");
+        int beginCharIndex = value.offsetByCodePoints(0, beginCodePointIndex);
+        int endCharIndex = value.offsetByCodePoints(0, endCodePointIndex);
+        return new StringPlus(value.substring(beginCharIndex, endCharIndex));
+    }
+
+    /**
+     * Returns a substring, clamping indices to valid range. Never throws IndexOutOfBounds.
+     * If beginIndex >= endIndex, returns empty string. Null-safe.
+     * @param beginIndex the beginning index, inclusive
+     * @param endIndex the ending index, exclusive
+     * @return a new StringPlus with the substring, or empty if indices invalid or value is null
+     */
+    public StringPlus safeSubstring(int beginIndex, int endIndex) {
+        if (value == null || value.isEmpty()) return new StringPlus("");
+        int len = value.length();
+        int start = Math.max(0, Math.min(beginIndex, len));
+        int end = Math.max(0, Math.min(endIndex, len));
+        if (start >= end) return new StringPlus("");
+        return new StringPlus(value.substring(start, end));
+    }
+
     // --- Standard String-like Methods (Fluent) ---
 
     /**
@@ -90,12 +221,34 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
     }
 
     /**
+     * Converts the string to lower case using the specified locale.
+     * @param locale the locale to use
+     * @return a new StringPlus converted to lower case using the locale
+     */
+    public StringPlus toLowerCase(java.util.Locale locale) {
+        if (value == null) return this;
+        if (locale == null) return toLowerCase();
+        return new StringPlus(value.toLowerCase(locale));
+    }
+
+    /**
      * See {@link String#toUpperCase()}.
      * @return a new StringPlus converted to upper case.
      */
     public StringPlus toUpperCase() {
         if (value == null) return this;
         return new StringPlus(value.toUpperCase());
+    }
+
+    /**
+     * Converts the string to upper case using the specified locale.
+     * @param locale the locale to use
+     * @return a new StringPlus converted to upper case using the locale
+     */
+    public StringPlus toUpperCase(java.util.Locale locale) {
+        if (value == null) return this;
+        if (locale == null) return toUpperCase();
+        return new StringPlus(value.toUpperCase(locale));
     }
     
     /**
@@ -105,6 +258,26 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
     public StringPlus replace(CharSequence target, CharSequence replacement) {
         if (value == null) return this;
         return new StringPlus(value.replace(target, replacement));
+    }
+
+    /**
+     * Normalizes whitespace: replaces all sequences of whitespace (spaces, tabs, newlines, etc.)
+     * with a single space and trims the result. Null-safe.
+     * @return a new StringPlus with normalized whitespace
+     */
+    public StringPlus normalizeWhitespace() {
+        if (value == null) return this;
+        return new StringPlus(value.replaceAll("\\s+", " ").trim());
+    }
+
+    /**
+     * Returns a new StringPlus with the interned string value (using String.intern()).
+     * Use with caution: excessive interning can cause memory leaks in the JVM string pool.
+     * @return a new StringPlus with interned value, or this if value is null
+     */
+    public StringPlus intern() {
+        if (value == null) return this;
+        return new StringPlus(value.intern());
     }
 
     // --- Custom Features from Requirements ---
@@ -281,6 +454,31 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
     }
 
     /**
+     * Checks if the string matches a given precompiled Pattern.
+     * @param pattern The precompiled Pattern.
+     * @return true if it matches, false otherwise.
+     */
+    public boolean matchesRegex(Pattern pattern) {
+        if (value == null || pattern == null) return false;
+        return pattern.matcher(value).matches();
+    }
+
+    /**
+     * Extracts all substrings that match a given precompiled Pattern.
+     * @param pattern The precompiled Pattern.
+     * @return A list of matching strings.
+     */
+    public List<String> extractMatches(Pattern pattern) {
+        if (value == null || pattern == null) return Collections.emptyList();
+        List<String> matches = new ArrayList<>();
+        Matcher matcher = pattern.matcher(value);
+        while (matcher.find()) {
+            matches.add(matcher.group());
+        }
+        return matches;
+    }
+
+    /**
      * Removes diacritical marks (accents) from the string.
      *
      * @return A new StringPlus instance with accents removed.
@@ -388,6 +586,31 @@ public final class StringPlus implements CharSequence, Serializable, Comparable<
         }
         
         return tokens;
+    }
+    
+    /**
+     * Returns the bytes of the string using the specified Charset. Null-safe.
+     * @param charset the Charset to use (required)
+     * @return the byte array, or empty array if value is null
+     * @throws NullPointerException if charset is null
+     */
+    public byte[] getBytes(java.nio.charset.Charset charset) {
+        if (charset == null) throw new NullPointerException("Charset must not be null");
+        if (value == null) return new byte[0];
+        return value.getBytes(charset);
+    }
+
+    /**
+     * Creates a StringPlus from a byte array and Charset. Null-safe.
+     * @param bytes the byte array
+     * @param charset the Charset to use (required)
+     * @return a new StringPlus, or empty if bytes is null
+     * @throws NullPointerException if charset is null
+     */
+    public static StringPlus fromBytes(byte[] bytes, java.nio.charset.Charset charset) {
+        if (charset == null) throw new NullPointerException("Charset must not be null");
+        if (bytes == null) return new StringPlus("");
+        return new StringPlus(new String(bytes, charset));
     }
     
     // --- Object Methods ---
